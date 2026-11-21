@@ -154,11 +154,19 @@ Heard Parrot is the voice assistant in the Heard app. Hold right ⌘ and talk to
 
 The macOS bundle built from this fork uses Apple on-device speech recognition to queue a reply to one pinned Codex thread. It needs a native Codex CLI with `codex queue` and supports threads from native Codex CLI or the desktop app. A separate OpenShell VM, Pi, and remote Codex installations require their own reply routing.
 
-1. [Install the development dependencies](CONTRIBUTING.md#setup), then run `.venv/bin/python -m pip install py2app` and `bash packaging/build-app.sh`. Open `packaging/dist/Heard.app`, the build containing the fork feature.
+1. [Install the development dependencies](CONTRIBUTING.md#setup) in a clean virtual environment. Build and sign the app locally, then open `packaging/dist/Heard.app`.
+
+   ```bash
+   .venv/bin/python -m pip install py2app
+   bash packaging/build-app.sh
+   codesign --force --sign - --entitlements packaging/entitlements.plist packaging/dist/Heard.app
+   ```
 2. Choose **Voice input → Local Codex push-to-talk (hold right ⌘)**. Grant Accessibility, Microphone, and Speech Recognition when macOS asks. The feature uses the Mac’s default sound input and speech language.
 3. After Codex produces an update, select its thread in **Active agents**. The menu marks the session Heard is currently reading. Hold **right Command** to record and release it to queue the transcript to the selected thread. Set **Voice input → Off** to disable the shortcut.
 
 Speech recognition uses no Heard account or API key. The selected Codex thread receives the text as a regular prompt. For local narration too, run `.venv/bin/heard download-voice`. For native Codex CLI hooks, run `.venv/bin/heard install codex`, then review and trust them via `/hooks` in Codex.
+
+Update this fork by pulling and rebuilding. Automatic checks for upstream app releases are off by default.
 
 ## Voice in *(Power)*
 
