@@ -82,6 +82,7 @@ same change — a drifted table is worse than none.
 | `heard/heard_api.py` | Client for `api.heard.dev`. Auth endpoints (install-code → bearer, refresh, signout) + plan/usage status. |
 | `heard/audio_monitor.py` | CoreAudio polling for "any app capturing the mic" → auto-silence. Debounced to filter notification-class mic blips. |
 | `heard/hotkey.py` + `accessibility.py` | pynput tap-hold listener. Daemon polls Accessibility trust and re-inits on the False→True transition. |
+| `heard/local_voice.py` | macOS on-device push-to-talk. Captures the pinned Codex thread at key-down and queues the final transcript to that UUID. |
 | `heard/ui.py` | rumps menu bar. Persona / Speed / Verbosity submenus, Active agents, Options, Pause/Resume, status header, "Report a problem…" (the only user-facing feedback surface). |
 | `heard/settings_widgets.py` | Native NSToolbar widget primitives (theme constants, fonts, pill buttons, cards, rows). |
 | `heard/settings_window.py` | Settings panel + first-launch onboarding wizard. `SettingsController` (Account, Voice, Keys, Shortcuts, Advanced) + `_OnboardingController`. |

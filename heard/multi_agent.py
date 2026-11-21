@@ -290,6 +290,7 @@ class SessionInfo:
     cwd: str = ""
     repo_name: str = ""
     repo_confidence: int = 0
+    agent: str = ""
     last_event: float = 0.0
     # Monotonic counter, bumped on every note_event. Used to break
     # ties when two sessions share a last_event timestamp (back-to-back
@@ -486,6 +487,8 @@ class MultiAgentRouter:
         session_id: str,
         cwd: str = "",
         path_hint: str | None = None,
+        *,
+        agent: str = "",
     ) -> None:
         """Record that ``session_id`` just fired an event.
 
@@ -534,6 +537,8 @@ class MultiAgentRouter:
                 # hook without a tool_input).
                 if cwd and not info.cwd:
                     info.cwd = cwd
+            if agent:
+                info.agent = agent
             self._event_counter += 1
             info.last_event = time.time()
             info.event_seq = self._event_counter
@@ -1116,6 +1121,7 @@ class MultiAgentRouter:
                         "repo_name": s.repo_name or _label_for(s),
                         "last_event_ago_s": round(now - s.last_event, 1),
                         "pinned": self._pinned == s.session_id,
+                        "agent": s.agent,
                     }
                 )
             return sorted(out, key=lambda d: d["last_event_ago_s"])

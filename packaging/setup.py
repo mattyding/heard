@@ -99,14 +99,10 @@ OPTIONS = {
         "LSUIElement": True,
         "NSHumanReadableCopyright": "Copyright © heardhq",
         "NSAppleEventsUsageDescription": "Heard needs to detect your global silence hotkey.",
-        # Heard Power's voice-input service runs as a child of this signed app,
-        # so it inherits this bundle's microphone TCC identity — which is what
-        # lets macOS actually prompt for the mic (a bare launchd/venv process
-        # can't). Harmless on non-Power installs: nothing requests the mic.
         "NSMicrophoneUsageDescription": (
-            "Heard Power transcribes your voice locally, on-device, for "
-            "hands-free dictation. Audio never leaves your Mac."
+            "Heard records your voice while you hold the push-to-talk key."
         ),
+        "NSSpeechRecognitionUsageDescription": "Heard uses on-device speech recognition for Codex voice replies.",
         "LSMinimumSystemVersion": "13.0",
         # heard:// custom URL scheme — used by the web sign-in handoff
         # (heard.dev/app-auth bounces the browser to heard://auth?code=…
@@ -156,7 +152,7 @@ OPTIONS = {
     # Extra stdlib/modules a downstream build needs but the OSS app's static
     # scan won't see (e.g. a private build that injects an extra package after
     # py2app runs). Comma-separated in PY2APP_EXTRA_INCLUDES; empty for OSS.
-    "includes": ["pkg_resources", "Quartz", "ApplicationServices"]
+    "includes": ["pkg_resources", "Quartz", "ApplicationServices", "AVFoundation", "Speech"]
     + [m.strip() for m in os.environ.get("PY2APP_EXTRA_INCLUDES", "").split(",") if m.strip()],
     "excludes": [
         "tkinter",

@@ -50,6 +50,8 @@ dependencies = [
     "pyobjc-framework-WebKit>=10.0; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
     "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-AVFoundation>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-Speech>=10.0; sys_platform == 'darwin'",
     # Pulled in transitively by kokoro-onnx. Pinned <1.26 because
     # onnxruntime 1.26.0 dropped the macOS arm64 cp312 wheel (only
     # cp311 / cp313 / cp314 ship for Mac on that release), and our

@@ -15,9 +15,11 @@ this lives here and not in the front-end.
 from __future__ import annotations
 
 import socket
+from collections.abc import Callable
 from typing import Any
 
 RIGHT_COMMAND_KEYCODE = 54  # held alone types nothing; safe for push-to-talk
+_RIGHT_COMMAND_FLAG = 0x10  # NX_DEVICERCMDKEYMASK, independent of left Command
 
 
 def _indicator(action: str) -> None:
@@ -51,6 +53,22 @@ def start(sock_path: str, keycode: int = RIGHT_COMMAND_KEYCODE) -> Any:
     key still behaves normally elsewhere."""
     if not sock_path:
         return None
+
+    def press() -> None:
+        _indicator("show")
+        _poke(sock_path, "start")
+
+    def release() -> None:
+        _indicator("hide")
+        _poke(sock_path, "stop")
+
+    return monitor(press, release, keycode=keycode)
+
+
+def monitor(
+    press: Callable[[], None], release: Callable[[], None], *, keycode: int = RIGHT_COMMAND_KEYCODE,
+) -> Any:
+    """Observe a modifier without consuming keystrokes in the focused app."""
     try:
         from AppKit import (  # noqa: PLC0415
             NSEvent,
@@ -61,7 +79,7 @@ def start(sock_path: str, keycode: int = RIGHT_COMMAND_KEYCODE) -> Any:
         return None
 
     state = {"down": False}
-    flag = NSEventModifierFlagCommand
+    flag = _RIGHT_COMMAND_FLAG if keycode == RIGHT_COMMAND_KEYCODE else NSEventModifierFlagCommand
 
     def handler(event) -> None:
         try:
@@ -70,12 +88,10 @@ def start(sock_path: str, keycode: int = RIGHT_COMMAND_KEYCODE) -> Any:
             is_down = bool(event.modifierFlags() & flag)
             if is_down and not state["down"]:
                 state["down"] = True
-                _indicator("show")  # visual "listening" HUD while held
-                _poke(sock_path, "start")
+                press()
             elif not is_down and state["down"]:
                 state["down"] = False
-                _indicator("hide")
-                _poke(sock_path, "stop")
+                release()
         except Exception:
             pass
 

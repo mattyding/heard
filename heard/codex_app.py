@@ -95,6 +95,7 @@ def _session(meta: dict[str, Any], path: Path, cwd: str | None = None) -> dict[s
         "id": meta.get("id") or path.stem,
         "cwd": cwd or meta.get("cwd"),
         "transcript_path": str(path),
+        "agent": "codex",
     }
 
 

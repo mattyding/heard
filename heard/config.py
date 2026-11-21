@@ -75,7 +75,7 @@ DEFAULTS: dict[str, Any] = {
     "push_to_talk": False,
     "push_to_talk_socket": "",
     # Heard Power voice input. voice_mode is the menu-facing control:
-    #   off | ptt (hold-to-talk) | ambient (always listening).
+    #   off | local_ptt (local Codex input) | ptt (Power) | ambient (Power).
     # push_to_talk (the daemon hotkey gate) is kept in sync with mode == ptt.
     "voice_mode": "off",
     # EXPERIMENT — override the narration-brain model on the BYOK path only
@@ -287,11 +287,8 @@ DEFAULTS: dict[str, Any] = {
     # hook layer regardless. Off-by-config disables the feature
     # entirely.
     "narrate_prompt_intent": True,
-    # Once a day the daemon hits api.github.com to check for a newer
-    # stable release and posts a one-time notification per version.
-    # Anonymous request, no telemetry. Set False to disable entirely
-    # (`heard config set update_check_enabled false`).
-    "update_check_enabled": True,
+    # Upstream app releases do not contain this fork's voice input.
+    "update_check_enabled": False,
     # v2 harness path. Flipped ON by default at v1.0.0 (2026-06-02) —
     # the cross-event-judgment narration (persona + Agent State +
     # Working Memory + current event into one Haiku call) is now the

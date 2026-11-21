@@ -23,7 +23,7 @@ import time
 import webbrowser
 from pathlib import Path
 
-from heard import client, config, notify, updater
+from heard import accessibility, client, config, local_voice, notify, push_to_talk, updater
 from heard.presets import list_bundled as list_presets
 
 ASSETS_DIR = Path(__file__).parent / "assets"
@@ -110,58 +110,57 @@ def _pretty_hotkey(binding: str) -> str:
     return "".join(out)
 
 
-if rumps is not None:
-    class HeardApp(rumps.App):
-        """macOS menu-bar app. Only defined when rumps is available
-        (i.e. on macOS)."""
-        def __init__(self) -> None:
-            # template=True asks macOS to auto-tint the icon to match the
-            # menu bar (white in dark mode, black in light mode). The
-            # title is a Unicode zero-width space (U+200B) — load-bearing
-            # quirk: rumps' fallbackOnName() decides "would this slot be
-            # empty?" by checking ``title() or image()`` during init, and
-            # the title is applied *before* the image mounts on the
-            # NSStatusItem. With title="" that check fires when both are
-            # falsy, rumps stamps in the app name ("Heard"), and the
-            # fallback persists even after the icon mounts. A regular
-            # space dodges fallback but renders as visible padding next
-            # to the icon. U+200B is truthy (skips fallback) AND has zero
-            # advance width (no visible gap) — best of both.
-            if ICON_PATH.exists():
-                super().__init__(
-                    "Heard",
-                    title="​",
-                    icon=str(ICON_PATH),
-                    template=True,
-                    quit_button=None,
-                )
-            else:
-                super().__init__("Heard", title="Heard", quit_button=None)
-            # Register the heard:// URL handler here (not in ui.run) — the
-            # launched .app enters via packaging/app_entry.py → HeardApp().run(),
-            # which never touches ui.run(). Best-effort; the install-code paste
-            # field is the fallback if this can't register.
-            try:
-                from heard import url_scheme
-                url_scheme.register()
-            except Exception as e:
-                print(f"url scheme handler not registered: {e}", file=sys.stderr)
-            self._first_launch_checked = False
-            # Tracks whether the daemon has ever answered status. Until it
-            # does, we show "starting…" instead of "daemon stopped" — the
-            # menu polls every 3 s but the daemon takes 1-3 s to come up
-            # the first time, and "stopped" makes a fresh user think
-            # they're already broken.
-            self._daemon_ever_alive = False
-            # Tracks whether the menu-bar app's icon/title is currently
-            # in the "muted" presentation — flipping NSImage and title on
-            # every refresh tick would be wasteful even though rumps would
-            # accept it. Initialised to None so the first refresh always
-            # writes through and matches whatever state we boot into.
-            self._muted_indicator: bool | None = None
-            self._build_menu()
-            self.refresh(None)
-            rumps.Timer(self.refresh, 3).start()
+class HeardApp(rumps.App if rumps is not None else object):
+    """macOS menu-bar app."""
+
+    def __init__(self) -> None:
+        # template=True asks macOS to auto-tint the icon to match the
+        # menu bar (white in dark mode, black in light mode). The
+        # title is a Unicode zero-width space (U+200B) — load-bearing
+        # quirk: rumps' fallbackOnName() decides "would this slot be
+        # empty?" by checking ``title() or image()`` during init, and
+        # the title is applied *before* the image mounts on the
+        # NSStatusItem. With title="" that check fires when both are
+        # falsy, rumps stamps in the app name ("Heard"), and the
+        # fallback persists even after the icon mounts. A regular
+        # space dodges fallback but renders as visible padding next
+        # to the icon. U+200B is truthy (skips fallback) AND has zero
+        # advance width (no visible gap) — best of both.
+        if ICON_PATH.exists():
+            super().__init__(
+                "Heard",
+                title="​",
+                icon=str(ICON_PATH),
+                template=True,
+                quit_button=None,
+            )
+        else:
+            super().__init__("Heard", title="Heard", quit_button=None)
+        # Register the heard:// URL handler here (not in ui.run) — the
+        # launched .app enters via packaging/app_entry.py → HeardApp().run(),
+        # which never touches ui.run(). Best-effort; the install-code paste
+        # field is the fallback if this can't register.
+        try:
+            from heard import url_scheme
+            url_scheme.register()
+        except Exception as e:
+            print(f"url scheme handler not registered: {e}", file=sys.stderr)
+        self._first_launch_checked = False
+        # Tracks whether the daemon has ever answered status. Until it
+        # does, we show "starting…" instead of "daemon stopped" — the
+        # menu polls every 3 s but the daemon takes 1-3 s to come up
+        # the first time, and "stopped" makes a fresh user think
+        # they're already broken.
+        self._daemon_ever_alive = False
+        # Tracks whether the menu-bar app's icon/title is currently
+        # in the "muted" presentation — flipping NSImage and title on
+        # every refresh tick would be wasteful even though rumps would
+        # accept it. Initialised to None so the first refresh always
+        # writes through and matches whatever state we boot into.
+        self._muted_indicator: bool | None = None
+        self._build_menu()
+        self.refresh(None)
+        rumps.Timer(self.refresh, 3).start()
 
     # --- menu construction --------------------------------------------------
 
@@ -298,9 +297,9 @@ if rumps is not None:
             "Auto-silence on call",
             callback=self.on_toggle_auto_silence,
         )
-        # Voice input (Heard Power) — plan-gated. Power users get the full
-        # submenu (mode radios + clean-up); everyone else sees a clickable
-        # upgrade teaser. voice_input_unlocked is a dev/test escape hatch.
+        self._local_voice = None
+        self._local_ptt_monitor = None
+        self._reply_target = None
         _powered = (_plan == "power") or bool(config.load().get("voice_input_unlocked"))
         self._voice_built_powered = _powered
         self.voice_menu = self._build_voice_menu(_powered)
@@ -404,13 +403,7 @@ if rumps is not None:
             self.pause_item,
             self.continue_item,
             None,
-            # Menu bar = quick access only. Persona, Active agents, and the
-            # rest of the tuning live in Settings now; the menu keeps just
-            # the two knobs worth a one-click flip: Mode (top) then Speed
-            # (bottom). The persona_menu / active_sessions_menu objects are
-            # still constructed above so their refresh() paths stay valid —
-            # they're just no longer surfaced here (same orphan pattern as
-            # options_menu).
+            self.active_sessions_menu,
             self.voice_menu,
             self.mode_menu,
             self.speed_menu,
@@ -433,6 +426,8 @@ if rumps is not None:
 
         self._refresh_account_row(cfg)
         self._refresh_voice_menu(cfg)
+        self._reply_target = local_voice.selected_target(status)
+        self._sync_local_voice(cfg.get("voice_mode") == "local_ptt")
         self._refresh_api_key_labels(cfg, status or {})
         self._refresh_usage_item(cfg, status or {})
         # The invite reward is managed voice — useless to an unlimited paid
@@ -536,8 +531,6 @@ if rumps is not None:
         # submenus were pulled in the Mode-replaces-Verbosity cleanup.
         # Settings → Voice has its own popup + refresh path.
         self.auto_silence_item.state = 1 if cfg.get("auto_silence_on_mic", True) else 0
-        # Voice input mode radios (only present on the Power submenu). Cleanup is
-        # always on — not a user choice — so there's no toggle to reflect.
         _mode = cfg.get("voice_mode", "off")
         for _m, _it in self._voice_mode_items.items():
             _it.state = 1 if _m == _mode else 0
@@ -662,14 +655,18 @@ if rumps is not None:
         any_pinned = any(s.get("pinned") for s in sessions)
 
         # First in list = most recent = focus (when nothing pinned).
-        for i, s in enumerate(sessions):
-            label = s.get("repo_name") or "agent"
+        labels = [s.get("repo_name") or "agent" for s in sessions]
+        for i, (s, label) in enumerate(zip(sessions, labels, strict=True)):
+            if labels.count(label) > 1:
+                label = f"{label} ({s['session_id'][-8:]})"
             if s.get("pinned"):
                 title = f"📌 {label}"
             elif not any_pinned and i == 0:
                 title = f"● {label}"
             else:
                 title = f"   {label}"
+            if s["session_id"] == status.get("speaking_session_id"):
+                title += " · Speaking"
             ago = s.get("last_event_ago_s", 0)
             # Show how recent for the user's situational awareness.
             if ago < 5:
@@ -981,24 +978,19 @@ if rumps is not None:
         self.refresh(None)
 
     def _build_voice_menu(self, powered: bool):
-        """The Voice-input menu item: full submenu for Power, upgrade teaser
-        otherwise. Extracted so a plan→power change (sign-in) can re-gate it
-        without a relaunch (the menu is otherwise built once at launch)."""
         self._voice_mode_items = {}
-        if not powered:
-            return rumps.MenuItem(
-                "Voice input — upgrade to Power", callback=self.on_upgrade_power)
         vm = rumps.MenuItem("Voice input")
-        for label, mode in (
-            ("Off", "off"),
-            ("Push to talk (hold ⌘)", "ptt"),
-            ("Hands-free (always on)", "ambient"),
-        ):
+        modes = [("Off", "off"), ("Local Codex push-to-talk (hold right ⌘)", "local_ptt")]
+        if powered:
+            modes += [("Power push-to-talk (hold right ⌘)", "ptt"), ("Hands-free (always on)", "ambient")]
+        for label, mode in modes:
             item = rumps.MenuItem(label, callback=self._mk_voice_mode_cb(mode))
             vm[label] = item
             self._voice_mode_items[mode] = item
-        # Phone pairing (Heard Power) — poke Power's socket (OSS never imports it).
         vm.add(rumps.separator)
+        if not powered:
+            vm["Upgrade to Power…"] = rumps.MenuItem("Upgrade to Power…", callback=self.on_upgrade_power)
+            return vm
         vm["Pair phone…"] = rumps.MenuItem("Pair phone…", callback=self._on_pair_phone)
         vm["Reset pairing (un-pair all)"] = rumps.MenuItem(
             "Reset pairing (un-pair all)", callback=self._on_reset_pair)
@@ -1030,12 +1022,49 @@ if rumps is not None:
         def _cb(_sender) -> None:
             config.set_value("voice_mode", mode)
             config.set_value("push_to_talk", mode == "ptt")
+            if mode == "local_ptt":
+                accessibility.ensure_trusted(prompt=True)
+                if self._load_local_voice():
+                    self._local_voice.request_permissions()
             try:
                 client.send({"cmd": "reload"})
             except Exception:
                 pass
             self.refresh(None)
         return _cb
+
+    def _load_local_voice(self) -> bool:
+        if self._local_voice is None:
+            try:
+                self._local_voice = local_voice.LocalVoice()
+            except ImportError:
+                notify.notify("Heard voice reply", "Install Heard with its macOS Speech and AVFoundation dependencies.")
+                return False
+        return True
+
+    def _sync_local_voice(self, enabled: bool) -> None:
+        if enabled and accessibility.is_trusted():
+            if self._local_ptt_monitor is None and self._load_local_voice():
+                self._local_ptt_monitor = push_to_talk.monitor(self._start_local_reply, self._local_voice.release)
+        elif self._local_ptt_monitor is not None:
+            from AppKit import NSEvent
+
+            NSEvent.removeMonitor_(self._local_ptt_monitor)
+            self._local_ptt_monitor = None
+            self._local_voice.cancel()
+
+    def _start_local_reply(self) -> None:
+        if self._reply_target is None:
+            notify.notify(
+                "Heard voice reply", "Select a Codex session under Active agents before holding right Command.",
+            )
+            return
+        try:
+            client.send({"cmd": "stop"})
+        except OSError:
+            notify.notify("Heard voice reply", "The Heard daemon is unavailable. Select a session after it reconnects.")
+            return
+        self._local_voice.start(self._reply_target)
 
     def _poke_power(self, cmd: str) -> bool:
         """Poke Heard Power's voice-service socket (open-core: OSS pokes Power,
@@ -1702,6 +1731,7 @@ if rumps is not None:
             pass
 
     def on_quit(self, _sender) -> None:
+        self._sync_local_voice(False)
         # Latch the indefinite-mute flag *before* quitting so that the
         # next agent event — which would otherwise respawn the daemon
         # via ensure_daemon() — finds heard.client.is_muted() == True

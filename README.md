@@ -76,7 +76,7 @@ The engine in this repo is open source under Apache 2.0 and needs no account or 
 - Speech comes from Kokoro text-to-speech on your Mac, after you run `heard download-voice` once (about 350 MB).
 - With no Anthropic key and no Heard sign-in, spoken updates are built on your Mac from templates and the agent's own text. If the `claude` command is installed, the engine can send agent activity to Anthropic through `claude -p`, with your Claude login, to write rolled-up project summaries. An ambiguous reply to Heard's catch-up prompt can go the same way.
 - Narration content and source code are never sent to analytics, which are on by default; turn them off by setting `product_analytics: false` in the config file that `heard config path` prints.
-- It speaks; it does not listen. Push to talk and voice replies are app features on Power.
+- The macOS app built from this fork also supports [local Codex push-to-talk](#local-codex-push-to-talk).
 - Add your own keys only if you want ElevenLabs voices or LLM-written summaries.
 
 ```bash
@@ -150,6 +150,16 @@ Heard Parrot is the voice assistant in the Heard app. Hold right ⌘ and talk to
 - **Remembers you.** Keeps what you tell it about yourself and your work; see or remove it in Settings → Parrot.
 - **Looks at your screen** when you ask it to (needs Screen Recording permission).
 
+## Local Codex push-to-talk
+
+The macOS bundle built from this fork uses Apple on-device speech recognition to queue a reply to one pinned Codex thread. It needs a native Codex CLI with `codex queue` and supports threads from native Codex CLI or the desktop app. A separate OpenShell VM, Pi, and remote Codex installations require their own reply routing.
+
+1. [Install the development dependencies](CONTRIBUTING.md#setup), then run `.venv/bin/python -m pip install py2app` and `bash packaging/build-app.sh`. Open `packaging/dist/Heard.app`, the build containing the fork feature.
+2. Choose **Voice input → Local Codex push-to-talk (hold right ⌘)**. Grant Accessibility, Microphone, and Speech Recognition when macOS asks. The feature uses the Mac’s default sound input and speech language.
+3. After Codex produces an update, select its thread in **Active agents**. The menu marks the session Heard is currently reading. Hold **right Command** to record and release it to queue the transcript to the selected thread. Set **Voice input → Off** to disable the shortcut.
+
+Speech recognition uses no Heard account or API key. The selected Codex thread receives the text as a regular prompt. For local narration too, run `.venv/bin/heard download-voice`. For native Codex CLI hooks, run `.venv/bin/heard install codex`, then review and trust them via `/hooks` in Codex.
+
 ## Voice in *(Power)*
 
 - **Push to talk**: press right ⌘ to talk to Parrot: ask about your sessions, or have it tell a session what to do.
@@ -161,7 +171,7 @@ So on Power, Heard is the full voice loop: you speak, your agents do the work, H
 
 | | Voices | Voice in, Parrot, iPhone | Price |
 |---|---|---|---|
-| **Free** (self-host: build from this repo) | **Local only**: Kokoro or your own keys, nothing through our cloud | - | Free |
+| **Free** (self-host: build from this repo) | **Local only**: Kokoro or your own keys, nothing through our cloud | Local Codex push-to-talk | Free |
 | **Power** | Cloud voices, up to 2M characters a day | **Yes**: push to talk, Parrot, text or call Parrot from your iPhone | [See pricing](https://heard.dev/pricing?utm_source=github&utm_medium=organic&utm_campaign=readme): $24/mo billed yearly, $30 monthly |
 
 **Free is the open-source path**: [clone this repo](#self-host-open-source) and run the engine with your own ElevenLabs / Anthropic keys or fully local Kokoro; no account, nothing through our cloud. The [downloadable app](https://heard.dev/download?utm_source=github&utm_medium=organic&utm_campaign=readme) is the **official closed build**, a native successor to this engine with the cloud voices and narration brain run for you; sign in and your plan decides what's on. The app is key-free by design, so when a trial ends without a plan it goes quiet. [See pricing →](https://heard.dev/?utm_source=github&utm_medium=organic&utm_campaign=readme#pricing)

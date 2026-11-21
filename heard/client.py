@@ -538,12 +538,15 @@ def extract_assistant_texts_from(
     return out, end
 
 
-def _session_from_data(data: dict) -> dict:
-    return {
+def _session_from_data(data: dict, *, agent: str = "") -> dict:
+    session = {
         "id": data.get("session_id") or "default",
         "cwd": data.get("cwd"),
         "transcript_path": data.get("transcript_path"),
     }
+    if agent:
+        session["agent"] = agent
+    return session
 
 
 # --- Claude Code event handlers ---------------------------------------------
@@ -759,7 +762,7 @@ def handle_cc_user_prompt_submit(data: dict) -> None:
 
 def handle_codex_stop(data: dict) -> None:
     cfg = config.load(cwd=data.get("cwd"))
-    session = _session_from_data(data)
+    session = _session_from_data(data, agent="codex")
     sid = session["id"]
     # Codex hands us the assistant message directly. Use the transcript
     # path when available so we can surface intermediate prose; fall
@@ -791,7 +794,7 @@ def handle_codex_stop(data: dict) -> None:
 
 def handle_codex_pre_tool(data: dict) -> None:
     cfg = config.load(cwd=data.get("cwd"))
-    session = _session_from_data(data)
+    session = _session_from_data(data, agent="codex")
 
     transcript = data.get("transcript_path")
     spoke_text = 0
@@ -833,7 +836,7 @@ def handle_codex_post_tool(data: dict) -> None:
         neutral=ev.text,
         tag=ev.tag,
         ctx=ev.ctx,
-        session=_session_from_data(data),
+        session=_session_from_data(data, agent="codex"),
     )
 
 

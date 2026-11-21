@@ -20,10 +20,7 @@
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
 
-    <!-- NOTE: mic (device.audio-input) + JIT (cs.allow-jit,
-         cs.allow-unsigned-executable-memory) entitlements are NOT here — the
-         public OSS app has no microphone/STT/numba and must stay minimal. The
-         PRIVATE Power build (which injects the voice engine) needs them and
-         signs with its own entitlements. -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
 </dict>
 </plist>

@@ -299,6 +299,7 @@ class Daemon:
         self._lock = threading.Lock()
         self._current_proc: subprocess.Popen | None = None
         self._current_cancel: threading.Event | None = None
+        self._speaking_session_id: str | None = None
         self._last_error: dict | None = None
         # Most-recent utterance ID. Stamped onto the history record at
         # speak time and remembered here so a later `heard feedback` /
@@ -1069,7 +1070,7 @@ class Daemon:
         plan = (cfg.get("heard_plan") or "").strip().lower()
         powered = plan == "power" or bool(cfg.get("voice_input_unlocked"))
         mode = (cfg.get("voice_mode") or "off").strip().lower()
-        return bool(cmd) and powered and mode != "off"
+        return bool(cmd) and powered and mode in ("ptt", "ambient")
 
     def _start_voice_service_watch(self) -> None:
         """Self-heal: re-evaluate the voice-service GATE on a timer, off FRESH
@@ -1167,7 +1168,7 @@ class Daemon:
             if cmd:
                 cmd = cmd.replace("{python}", sys.executable)
             mode = (self.cfg.get("voice_mode") or "off").strip().lower()
-            should_run = self._voice_backend_available() and mode != "off"
+            should_run = self._voice_backend_available() and mode in ("ptt", "ambient")
 
             if not cmd:
                 # No service configured (pure-OSS build) — tear down if we had one.
@@ -2782,6 +2783,7 @@ class Daemon:
                 text, cfg, persona, session_id, voice_override, hmeta = self._queue.pop(0)
                 cancel = threading.Event()
                 self._current_cancel = cancel
+                self._speaking_session_id = session_id
             # Prepend a brief project tag on a project switch (computed here,
             # at actual play order, not at enqueue — the queue reorders).
             text = self._with_project_tag(text, hmeta)
@@ -2789,6 +2791,7 @@ class Daemon:
             with self._queue_cv:
                 if self._current_cancel is cancel:
                     self._current_cancel = None
+                    self._speaking_session_id = None
                 if not cancel.is_set():
                     # Log to spoken history. Synth ms is captured in
                     # _speak's _log line; we don't repeat it here —
@@ -3360,7 +3363,7 @@ class Daemon:
         # project name (e.g. "heard"). See router.note_event for the
         # tiered confidence rules.
         path_hint = (ctx.get("abs_path") or None) if isinstance(ctx, dict) else None
-        self.router.note_event(session_id, cwd or "", path_hint=path_hint)
+        self.router.note_event(session_id, cwd or "", path_hint=path_hint, agent=sess_payload.get("agent") or "")
 
         # Suppress all narration until the user has finished the
         # first-launch wizard. This is the right gate for the
@@ -3807,6 +3810,7 @@ class Daemon:
         if cmd == "status":
             with self._queue_cv:
                 speaking = self._current_cancel is not None
+                speaking_session_id = self._speaking_session_id
                 queued = len(self._queue)
             payload = {
                 "alive": True,
@@ -3821,6 +3825,7 @@ class Daemon:
                 "account_usage": self._account_usage,
                 # Real-time activity hint for the menu bar header.
                 "speaking": speaking,
+                "speaking_session_id": speaking_session_id,
                 "queued": queued,
                 # Multi-agent: list of recently-active sessions so the
                 # menu can render the Active Sessions submenu and show

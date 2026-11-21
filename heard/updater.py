@@ -771,6 +771,8 @@ def apply_staged_at_launch() -> bool:
     """At app launch: if a previously-staged newer release exists, swap into it
     now (spawns the helper; CALLER must exit so the helper can relaunch the new
     version). Cleans up stale stagings. Returns True when a swap was started."""
+    if not config.load().get("update_check_enabled", False):
+        return False
     state = _load_state()
     tag = (state.get("staged_tag") or "").strip()
     path = state.get("staged_path") or ""
